@@ -7,11 +7,13 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let preferences = SleepPreferences()
     private let reminderController = ReminderController()
+    private let launchAtLoginController = LaunchAtLoginController()
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     private var activeMenuItem: NSMenuItem?
     private var windDownMenuItem: NSMenuItem?
     private var bedtimeMenuItem: NSMenuItem?
+    private var launchAtLoginMenuItem: NSMenuItem?
     private var quitMenuItem: NSMenuItem?
     private var settingsWindow: NSWindow?
     private var timer: Timer?
@@ -22,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
         observeSystemChanges()
+        syncLaunchAtLoginRegistration()
 
         preferencesCancellable = preferences.objectWillChange.sink { [weak self] _ in
             DispatchQueue.main.async {
@@ -83,6 +86,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(bedtimeMenuItem!)
 
         menu.addItem(.separator())
+        let launchAtLoginItem = NSMenuItem(
+            title: "Open at Login",
+            action: #selector(toggleLaunchAtLogin),
+            keyEquivalent: ""
+        )
+        launchAtLoginMenuItem = launchAtLoginItem
+        menu.addItem(launchAtLoginItem)
+
         menu.addItem(NSMenuItem(
             title: "Settings...",
             action: #selector(openSettings),
@@ -129,6 +140,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         windDownMenuItem?.title = "Wind down: \(preferences.windDownDescription)"
         bedtimeMenuItem?.title = "Bedtime: \(preferences.bedtimeDescription)"
+
+        let launchAtLoginStatus = launchAtLoginController.currentStatus()
+        launchAtLoginMenuItem?.title = launchAtLoginStatus.isAvailable
+            ? "Open at Login"
+            : "Open at Login unavailable"
+        launchAtLoginMenuItem?.isEnabled = launchAtLoginStatus.isAvailable
+        launchAtLoginMenuItem?.state = launchAtLoginStatus.isEnabled ? .on : .off
+
         quitMenuItem?.isEnabled = !isReminderActive
         quitMenuItem?.title = isReminderActive
             ? "Quit disabled while reminder is active"
@@ -164,6 +183,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activePhase != .none
     }
 
+    private func syncLaunchAtLoginRegistration() {
+        do {
+            _ = try launchAtLoginController.syncRegistrationIfNeeded()
+        } catch {
+            showError(error)
+        }
+    }
+
     @objc private func screenParametersChanged() {
         reminderController.rebuild()
         evaluateSchedule()
@@ -171,6 +198,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func activeSpaceChanged() {
         evaluateSchedule()
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            let status = launchAtLoginController.currentStatus()
+            _ = try launchAtLoginController.setEnabled(!status.isEnabled)
+        } catch {
+            showError(error)
+        }
+
+        updateMenu()
     }
 
     @objc private func openSettings() {
@@ -196,6 +234,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func showError(_ error: Error) {
+        let alert = NSAlert(error: error)
+        alert.alertStyle = .warning
+        alert.runModal()
     }
 }
 

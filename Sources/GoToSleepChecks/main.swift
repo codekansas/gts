@@ -1,3 +1,4 @@
+import Foundation
 import GoToSleepCore
 
 func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
@@ -39,5 +40,59 @@ expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 29) == .windDown, "phase incl
 expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 30) == .bedtime, "phase includes bedtime start")
 expect(phasedSchedule.phase(minuteOfDay: 5 * 60 + 59) == .bedtime, "phase includes early morning")
 expect(phasedSchedule.phase(minuteOfDay: 6 * 60) == .none, "phase excludes wake time")
+
+let temporaryDirectoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+    "GoToSleepChecks.\(UUID().uuidString)",
+    isDirectory: true
+)
+defer {
+    try? FileManager.default.removeItem(at: temporaryDirectoryURL)
+}
+
+let unavailableLaunchAtLoginController = LaunchAtLoginController(
+    launchAgentDirectoryURL: temporaryDirectoryURL,
+    bundleURLProvider: { temporaryDirectoryURL.deletingLastPathComponent() },
+    executableURLProvider: { temporaryDirectoryURL.appendingPathComponent("GoToSleep") },
+    bundleIdentifierProvider: { "com.benbolte.gotosleep" }
+)
+expect(
+    unavailableLaunchAtLoginController.currentStatus() == LaunchAtLoginStatus(
+        isEnabled: false,
+        isAvailable: false
+    ),
+    "launch-at-login is unavailable outside an app bundle"
+)
+
+let bundleURL = temporaryDirectoryURL.appendingPathComponent("Go To Sleep.app", isDirectory: true)
+let executableURL = bundleURL.appendingPathComponent("Contents/MacOS/GoToSleep")
+let launchAtLoginController = LaunchAtLoginController(
+    launchAgentDirectoryURL: temporaryDirectoryURL,
+    bundleURLProvider: { bundleURL },
+    executableURLProvider: { executableURL },
+    bundleIdentifierProvider: { "com.benbolte.gotosleep" }
+)
+let enabledStatus = try launchAtLoginController.setEnabled(true)
+expect(
+    enabledStatus == LaunchAtLoginStatus(isEnabled: true, isAvailable: true),
+    "launch-at-login can be enabled for an app bundle"
+)
+
+let launchAgentURL = temporaryDirectoryURL.appendingPathComponent("com.benbolte.gotosleep.plist")
+let propertyList = NSDictionary(contentsOf: launchAgentURL) as? [String: Any]
+expect(propertyList?["Label"] as? String == "com.benbolte.gotosleep", "launch agent has expected label")
+expect(
+    propertyList?["ProgramArguments"] as? [String] == [
+        executableURL.path,
+        LaunchAtLoginController.launchArgument,
+    ],
+    "launch agent points at bundled executable"
+)
+
+let disabledStatus = try launchAtLoginController.setEnabled(false)
+expect(
+    disabledStatus == LaunchAtLoginStatus(isEnabled: false, isAvailable: true),
+    "launch-at-login can be disabled for an app bundle"
+)
+expect(!FileManager.default.fileExists(atPath: launchAgentURL.path), "launch agent is removed")
 
 print("GoToSleepChecks passed")
