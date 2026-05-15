@@ -66,6 +66,16 @@ public struct BedtimeSchedule: Equatable, Sendable {
         return .none
     }
 
+    public func roundedSleepLossMinutes(minuteOfDay minute: Int, interval: Int = 15) -> Int? {
+        precondition(interval > 0, "interval must be positive")
+        guard phase(minuteOfDay: minute) == .bedtime else {
+            return nil
+        }
+
+        let elapsedMinutes = Self.normalizedMinute(minute - startMinute)
+        return ((elapsedMinutes + interval / 2) / interval) * interval
+    }
+
     public static func minuteOfDay(for date: Date, calendar: Calendar = .current) -> Int {
         let components = calendar.dateComponents([.hour, .minute], from: date)
         let hour = components.hour ?? 0
