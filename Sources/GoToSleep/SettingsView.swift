@@ -3,28 +3,31 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var preferences: SleepPreferences
 
-    let isLocked: Bool
     let onDone: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Bedtime")
+            Text("Schedule")
                 .font(.title2.weight(.semibold))
 
             VStack(alignment: .leading, spacing: 14) {
                 DatePicker(
-                    "Starts",
-                    selection: $preferences.startDate,
+                    "Wind down",
+                    selection: $preferences.windDownStartDate,
                     displayedComponents: .hourAndMinute
                 )
-                .disabled(isLocked)
 
                 DatePicker(
-                    "Ends",
-                    selection: $preferences.endDate,
+                    "Bedtime",
+                    selection: $preferences.bedtimeStartDate,
                     displayedComponents: .hourAndMinute
                 )
-                .disabled(isLocked)
+
+                DatePicker(
+                    "Wake",
+                    selection: $preferences.bedtimeEndDate,
+                    displayedComponents: .hourAndMinute
+                )
             }
 
             HStack {
@@ -34,12 +37,6 @@ struct SettingsView: View {
                     .lineLimit(1)
 
                 Spacer()
-
-                if isLocked {
-                    Text("Locked")
-                        .font(.callout.weight(.medium))
-                        .foregroundStyle(.red)
-                }
             }
             .frame(height: 22)
 
@@ -50,6 +47,6 @@ struct SettingsView: View {
             }
         }
         .padding(22)
-        .frame(width: 380)
+        .frame(width: 430)
     }
 }

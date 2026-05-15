@@ -4,6 +4,7 @@ import GoToSleepCore
 @MainActor
 final class SleepPreferences: ObservableObject {
     private enum Keys {
+        static let windDownStartMinute = "windDown.startMinute"
         static let startMinute = "bedtime.startMinute"
         static let endMinute = "bedtime.endMinute"
     }
@@ -12,15 +13,24 @@ final class SleepPreferences: ObservableObject {
     private let defaults: UserDefaults
     private let formatter: DateFormatter
 
-    @Published var startDate: Date {
+    @Published var windDownStartDate: Date {
         didSet {
-            defaults.set(Self.minuteOfDay(for: startDate, calendar: calendar), forKey: Keys.startMinute)
+            defaults.set(
+                Self.minuteOfDay(for: windDownStartDate, calendar: calendar),
+                forKey: Keys.windDownStartMinute
+            )
         }
     }
 
-    @Published var endDate: Date {
+    @Published var bedtimeStartDate: Date {
         didSet {
-            defaults.set(Self.minuteOfDay(for: endDate, calendar: calendar), forKey: Keys.endMinute)
+            defaults.set(Self.minuteOfDay(for: bedtimeStartDate, calendar: calendar), forKey: Keys.startMinute)
+        }
+    }
+
+    @Published var bedtimeEndDate: Date {
+        didSet {
+            defaults.set(Self.minuteOfDay(for: bedtimeEndDate, calendar: calendar), forKey: Keys.endMinute)
         }
     }
 
@@ -33,30 +43,45 @@ final class SleepPreferences: ObservableObject {
         formatter.timeStyle = .short
         formatter.dateStyle = .none
 
-        let startMinute = Self.readMinute(
+        let windDownStartMinute = Self.readMinute(
+            defaults: defaults,
+            key: Keys.windDownStartMinute,
+            fallback: 21 * 60 + 15
+        )
+        let bedtimeStartMinute = Self.readMinute(
             defaults: defaults,
             key: Keys.startMinute,
-            fallback: 22 * 60
+            fallback: 21 * 60 + 30
         )
-        let endMinute = Self.readMinute(
+        let bedtimeEndMinute = Self.readMinute(
             defaults: defaults,
             key: Keys.endMinute,
-            fallback: 7 * 60
+            fallback: 6 * 60
         )
 
-        startDate = Self.date(forMinuteOfDay: startMinute, calendar: calendar)
-        endDate = Self.date(forMinuteOfDay: endMinute, calendar: calendar)
+        windDownStartDate = Self.date(forMinuteOfDay: windDownStartMinute, calendar: calendar)
+        bedtimeStartDate = Self.date(forMinuteOfDay: bedtimeStartMinute, calendar: calendar)
+        bedtimeEndDate = Self.date(forMinuteOfDay: bedtimeEndMinute, calendar: calendar)
     }
 
     var schedule: BedtimeSchedule {
         BedtimeSchedule(
-            startMinute: Self.minuteOfDay(for: startDate, calendar: calendar),
-            endMinute: Self.minuteOfDay(for: endDate, calendar: calendar)
+            windDownStartMinute: Self.minuteOfDay(for: windDownStartDate, calendar: calendar),
+            startMinute: Self.minuteOfDay(for: bedtimeStartDate, calendar: calendar),
+            endMinute: Self.minuteOfDay(for: bedtimeEndDate, calendar: calendar)
         )
     }
 
+    var bedtimeDescription: String {
+        "\(formatter.string(from: bedtimeStartDate)) - \(formatter.string(from: bedtimeEndDate))"
+    }
+
+    var windDownDescription: String {
+        "\(formatter.string(from: windDownStartDate)) - \(formatter.string(from: bedtimeStartDate))"
+    }
+
     var scheduleDescription: String {
-        "\(formatter.string(from: startDate)) - \(formatter.string(from: endDate))"
+        "Wind down \(windDownDescription), bedtime \(bedtimeDescription)"
     }
 
     private static func readMinute(defaults: UserDefaults, key: String, fallback: Int) -> Int {

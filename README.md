@@ -1,10 +1,12 @@
 # Go To Sleep
 
-Go To Sleep is a tiny macOS menu-bar app. Configure a bedtime range from the status item, and while that range is active the app keeps a floating reminder visible in the top-right corner:
+Go To Sleep is a tiny macOS menu-bar app. Configure wind-down and bedtime ranges from the status item, and while either range is active the app keeps a floating reminder visible in the top-right corner:
 
 > It's time for bed
 
-The reminder ignores mouse events, so it does not block clicks or typing in other apps. During bedtime, the app disables its normal Quit command and re-shows the reminder if the app is hidden.
+Wind-down defaults to 9:15 PM - 9:30 PM and shows a yellow reminder. Bedtime defaults to 9:30 PM - 6:00 AM and shows a red reminder.
+
+The reminder ignores mouse events, so it does not block clicks or typing in other apps. While a reminder is active, the app disables its normal Quit command and re-shows the reminder if the app is hidden.
 
 ## Development
 

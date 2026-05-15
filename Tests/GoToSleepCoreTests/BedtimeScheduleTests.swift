@@ -36,4 +36,19 @@ final class BedtimeScheduleTests: XCTestCase {
         XCTAssertEqual(BedtimeSchedule.normalizedMinute(24 * 60), 0)
         XCTAssertEqual(BedtimeSchedule.normalizedMinute(-1), 23 * 60 + 59)
     }
+
+    func testWindDownPhasePrecedesBedtime() {
+        let schedule = BedtimeSchedule(
+            windDownStartMinute: 21 * 60 + 15,
+            startMinute: 21 * 60 + 30,
+            endMinute: 6 * 60
+        )
+
+        XCTAssertEqual(schedule.phase(minuteOfDay: 21 * 60 + 14), .none)
+        XCTAssertEqual(schedule.phase(minuteOfDay: 21 * 60 + 15), .windDown)
+        XCTAssertEqual(schedule.phase(minuteOfDay: 21 * 60 + 29), .windDown)
+        XCTAssertEqual(schedule.phase(minuteOfDay: 21 * 60 + 30), .bedtime)
+        XCTAssertEqual(schedule.phase(minuteOfDay: 5 * 60 + 59), .bedtime)
+        XCTAssertEqual(schedule.phase(minuteOfDay: 6 * 60), .none)
+    }
 }

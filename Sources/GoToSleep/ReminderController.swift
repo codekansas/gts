@@ -1,4 +1,5 @@
 import AppKit
+import GoToSleepCore
 import SwiftUI
 
 @MainActor
@@ -9,15 +10,27 @@ final class ReminderController {
 
     private var panels: [ReminderPanel] = []
     private var screenSignatures: [String] = []
+    private var currentPhase: SleepPhase = .none
+    private var currentScheduleDescription = ""
 
-    func show(scheduleDescription: String) {
+    func show(phase: SleepPhase, scheduleDescription: String) {
         let screens = NSScreen.screens
         let signatures = screens.map { NSStringFromRect($0.visibleFrame) }
 
         if panels.count != screens.count || screenSignatures != signatures {
             rebuild()
-            panels = screens.map { makePanel(for: $0, scheduleDescription: scheduleDescription) }
+            panels = screens.map {
+                makePanel(
+                    for: $0,
+                    phase: phase,
+                    scheduleDescription: scheduleDescription
+                )
+            }
             screenSignatures = signatures
+        }
+
+        if currentPhase != phase || currentScheduleDescription != scheduleDescription {
+            updateContent(phase: phase, scheduleDescription: scheduleDescription)
         }
 
         for (panel, screen) in zip(panels, screens) {
@@ -33,13 +46,19 @@ final class ReminderController {
         }
         panels.removeAll()
         screenSignatures.removeAll()
+        currentPhase = .none
+        currentScheduleDescription = ""
     }
 
     func rebuild() {
         hide()
     }
 
-    private func makePanel(for screen: NSScreen, scheduleDescription: String) -> ReminderPanel {
+    private func makePanel(
+        for screen: NSScreen,
+        phase: SleepPhase,
+        scheduleDescription: String
+    ) -> ReminderPanel {
         let width = panelWidth(for: screen)
         let panel = ReminderPanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
@@ -50,7 +69,10 @@ final class ReminderController {
 
         panel.backgroundColor = .clear
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
-        panel.contentView = NSHostingView(rootView: ReminderView(scheduleDescription: scheduleDescription))
+        panel.contentView = NSHostingView(rootView: ReminderView(
+            phase: phase,
+            scheduleDescription: scheduleDescription
+        ))
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
@@ -61,6 +83,18 @@ final class ReminderController {
 
         position(panel, on: screen)
         return panel
+    }
+
+    private func updateContent(phase: SleepPhase, scheduleDescription: String) {
+        currentPhase = phase
+        currentScheduleDescription = scheduleDescription
+
+        panels.forEach { panel in
+            panel.contentView = NSHostingView(rootView: ReminderView(
+                phase: phase,
+                scheduleDescription: scheduleDescription
+            ))
+        }
     }
 
     private func position(_ panel: NSPanel, on screen: NSScreen) {
@@ -88,25 +122,26 @@ final class ReminderPanel: NSPanel {
 }
 
 private struct ReminderView: View {
+    let phase: SleepPhase
     let scheduleDescription: String
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "bed.double.fill")
+            Image(systemName: iconName)
                 .font(.system(size: 24, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(foregroundColor)
                 .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("It's time for bed")
+                Text(title)
                     .font(.system(size: 23, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(foregroundColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
 
                 Text(scheduleDescription)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.82))
+                    .foregroundStyle(foregroundColor.opacity(0.82))
                     .lineLimit(1)
             }
 
@@ -116,12 +151,50 @@ private struct ReminderView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(red: 0.82, green: 0.1, blue: 0.12).opacity(0.96))
+                .fill(backgroundColor.opacity(0.96))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.white.opacity(0.24), lineWidth: 1)
+                .stroke(foregroundColor.opacity(0.24), lineWidth: 1)
         )
         .padding(1)
+    }
+
+    private var title: String {
+        switch phase {
+        case .none:
+            "Go To Sleep"
+        case .windDown:
+            "Wind down for bed"
+        case .bedtime:
+            "It's time for bed"
+        }
+    }
+
+    private var iconName: String {
+        switch phase {
+        case .none, .bedtime:
+            "bed.double.fill"
+        case .windDown:
+            "moon.zzz.fill"
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch phase {
+        case .none, .bedtime:
+            Color(red: 0.82, green: 0.1, blue: 0.12)
+        case .windDown:
+            Color(red: 1.0, green: 0.78, blue: 0.18)
+        }
+    }
+
+    private var foregroundColor: Color {
+        switch phase {
+        case .none, .bedtime:
+            .white
+        case .windDown:
+            Color(red: 0.18, green: 0.12, blue: 0.02)
+        }
     }
 }

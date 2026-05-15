@@ -10,12 +10,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
 
     private var activeMenuItem: NSMenuItem?
+    private var windDownMenuItem: NSMenuItem?
     private var bedtimeMenuItem: NSMenuItem?
     private var quitMenuItem: NSMenuItem?
     private var settingsWindow: NSWindow?
     private var timer: Timer?
     private var preferencesCancellable: AnyCancellable?
-    private var isBedtimeActive = false
+    private var activePhase: SleepPhase = .none
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -39,12 +40,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         evaluateSchedule()
-        return isBedtimeActive ? .terminateCancel : .terminateNow
+        return isReminderActive ? .terminateCancel : .terminateNow
     }
 
     func applicationDidHide(_ notification: Notification) {
         evaluateSchedule()
-        if isBedtimeActive {
+        if isReminderActive {
             NSApp.unhide(nil)
         }
     }
@@ -72,6 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         activeMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         activeMenuItem?.isEnabled = false
         menu.addItem(activeMenuItem!)
+
+        windDownMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        windDownMenuItem?.isEnabled = false
+        menu.addItem(windDownMenuItem!)
 
         bedtimeMenuItem = NSMenuItem(title: "", action: nil, keyEquivalent: "")
         bedtimeMenuItem?.isEnabled = false
@@ -114,29 +119,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func updateMenu() {
-        activeMenuItem?.title = isBedtimeActive ? "Reminder active" : "Reminder inactive"
-        bedtimeMenuItem?.title = "Bedtime: \(preferences.scheduleDescription)"
-        quitMenuItem?.isEnabled = !isBedtimeActive
-        quitMenuItem?.title = isBedtimeActive
-            ? "Quit disabled during bedtime"
+        activeMenuItem?.title = switch activePhase {
+        case .none:
+            "Reminder inactive"
+        case .windDown:
+            "Wind-down reminder active"
+        case .bedtime:
+            "Bedtime reminder active"
+        }
+        windDownMenuItem?.title = "Wind down: \(preferences.windDownDescription)"
+        bedtimeMenuItem?.title = "Bedtime: \(preferences.bedtimeDescription)"
+        quitMenuItem?.isEnabled = !isReminderActive
+        quitMenuItem?.title = isReminderActive
+            ? "Quit disabled while reminder is active"
             : "Quit Go To Sleep"
     }
 
     private func evaluateSchedule() {
-        isBedtimeActive = preferences.schedule.contains(date: Date())
+        activePhase = preferences.schedule.phase(date: Date())
 
-        if isBedtimeActive {
-            reminderController.show(scheduleDescription: preferences.scheduleDescription)
-        } else {
+        switch activePhase {
+        case .none:
             reminderController.hide()
+        case .windDown:
+            reminderController.show(
+                phase: .windDown,
+                scheduleDescription: preferences.windDownDescription
+            )
+        case .bedtime:
+            reminderController.show(
+                phase: .bedtime,
+                scheduleDescription: preferences.bedtimeDescription
+            )
         }
 
         updateMenu()
         settingsWindow?.contentView = NSHostingView(rootView: SettingsView(
             preferences: preferences,
-            isLocked: isBedtimeActive,
             onDone: { [weak self] in self?.settingsWindow?.close() }
         ))
+    }
+
+    private var isReminderActive: Bool {
+        activePhase != .none
     }
 
     @objc private func screenParametersChanged() {
@@ -151,7 +176,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 380, height: 244),
+                contentRect: NSRect(x: 0, y: 0, width: 430, height: 286),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false

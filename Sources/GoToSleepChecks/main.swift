@@ -28,4 +28,16 @@ expect(BedtimeSchedule.normalizedMinute(0) == 0, "normalizes zero")
 expect(BedtimeSchedule.normalizedMinute(24 * 60) == 0, "normalizes next midnight")
 expect(BedtimeSchedule.normalizedMinute(-1) == 23 * 60 + 59, "normalizes previous minute")
 
+let phasedSchedule = BedtimeSchedule(
+    windDownStartMinute: 21 * 60 + 15,
+    startMinute: 21 * 60 + 30,
+    endMinute: 6 * 60
+)
+expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 14) == .none, "phase excludes before wind-down")
+expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 15) == .windDown, "phase includes wind-down start")
+expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 29) == .windDown, "phase includes wind-down interior")
+expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 30) == .bedtime, "phase includes bedtime start")
+expect(phasedSchedule.phase(minuteOfDay: 5 * 60 + 59) == .bedtime, "phase includes early morning")
+expect(phasedSchedule.phase(minuteOfDay: 6 * 60) == .none, "phase excludes wake time")
+
 print("GoToSleepChecks passed")
