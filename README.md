@@ -27,9 +27,9 @@ Run local checks:
 swift run GoToSleepChecks
 ```
 
-This checkout only has the macOS Command Line Tools installed, so local
-`swift test` may fail with a missing `XCTest` module. GitHub Actions selects
-Xcode and runs the normal `swift test` workflow.
+On machines with only the macOS Command Line Tools installed, local
+`swift test` can fail with a missing `XCTest` module. GitHub Actions selects
+Xcode before running the normal `swift test` workflow.
 
 ## CI and Releases
 
