@@ -13,8 +13,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var activeMenuItem: NSMenuItem?
     private var windDownMenuItem: NSMenuItem?
     private var bedtimeMenuItem: NSMenuItem?
-    private var launchAtLoginMenuItem: NSMenuItem?
-    private var quitMenuItem: NSMenuItem?
     private var settingsWindow: NSWindow?
     private var timer: Timer?
     private var preferencesCancellable: AnyCancellable?
@@ -39,11 +37,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         evaluateSchedule()
-    }
-
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        evaluateSchedule()
-        return isReminderActive ? .terminateCancel : .terminateNow
     }
 
     func applicationDidHide(_ notification: Notification) {
@@ -86,14 +79,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(bedtimeMenuItem!)
 
         menu.addItem(.separator())
-        let launchAtLoginItem = NSMenuItem(
-            title: "Open at Login",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
-        )
-        launchAtLoginMenuItem = launchAtLoginItem
-        menu.addItem(launchAtLoginItem)
-
         menu.addItem(NSMenuItem(
             title: "Settings...",
             action: #selector(openSettings),
@@ -101,13 +86,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ))
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(
+        menu.addItem(NSMenuItem(
             title: "Quit Go To Sleep",
             action: #selector(quit),
             keyEquivalent: "q"
-        )
-        quitMenuItem = quitItem
-        menu.addItem(quitItem)
+        ))
 
         statusItem.menu = menu
         updateMenu()
@@ -140,22 +123,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         windDownMenuItem?.title = "Wind down: \(preferences.windDownDescription)"
         bedtimeMenuItem?.title = "Bedtime: \(preferences.bedtimeDescription)"
-
-        let launchAtLoginStatus = launchAtLoginController.currentStatus()
-        launchAtLoginMenuItem?.title = launchAtLoginStatus.isAvailable
-            ? "Open at Login"
-            : "Open at Login unavailable"
-        launchAtLoginMenuItem?.isEnabled = launchAtLoginStatus.isAvailable
-        launchAtLoginMenuItem?.state = launchAtLoginStatus.isEnabled ? .on : .off
-
-        quitMenuItem?.isEnabled = !isReminderActive
-        quitMenuItem?.title = isReminderActive
-            ? "Quit disabled while reminder is active"
-            : "Quit Go To Sleep"
     }
 
     private func evaluateSchedule() {
-        activePhase = preferences.schedule.phase(date: Date())
+        let schedule = preferences.schedule
+        activePhase = schedule.phase(date: Date())
 
         switch activePhase {
         case .none:
@@ -163,20 +135,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case .windDown:
             reminderController.show(
                 phase: .windDown,
+                schedule: schedule,
                 scheduleDescription: preferences.windDownDescription
             )
         case .bedtime:
             reminderController.show(
                 phase: .bedtime,
+                schedule: schedule,
                 scheduleDescription: preferences.bedtimeDescription
             )
         }
 
         updateMenu()
-        settingsWindow?.contentView = NSHostingView(rootView: SettingsView(
-            preferences: preferences,
-            onDone: { [weak self] in self?.settingsWindow?.close() }
-        ))
+        updateSettingsWindowContent()
     }
 
     private var isReminderActive: Bool {
@@ -200,21 +171,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         evaluateSchedule()
     }
 
-    @objc private func toggleLaunchAtLogin() {
+    private func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
         do {
-            let status = launchAtLoginController.currentStatus()
-            _ = try launchAtLoginController.setEnabled(!status.isEnabled)
+            _ = try launchAtLoginController.setEnabled(isEnabled)
         } catch {
             showError(error)
         }
 
-        updateMenu()
+        updateSettingsWindowContent()
     }
 
     @objc private func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 430, height: 286),
+                contentRect: NSRect(x: 0, y: 0, width: 430, height: 324),
                 styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false
@@ -230,6 +200,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settingsWindow?.center()
         settingsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func updateSettingsWindowContent() {
+        settingsWindow?.contentView = NSHostingView(rootView: SettingsView(
+            preferences: preferences,
+            launchAtLoginStatus: launchAtLoginController.currentStatus(),
+            onLaunchAtLoginChanged: { [weak self] isEnabled in
+                self?.setLaunchAtLoginEnabled(isEnabled)
+            },
+            onDone: { [weak self] in self?.settingsWindow?.close() }
+        ))
     }
 
     @objc private func quit() {

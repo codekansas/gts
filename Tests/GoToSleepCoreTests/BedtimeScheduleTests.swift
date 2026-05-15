@@ -51,4 +51,20 @@ final class BedtimeScheduleTests: XCTestCase {
         XCTAssertEqual(schedule.phase(minuteOfDay: 5 * 60 + 59), .bedtime)
         XCTAssertEqual(schedule.phase(minuteOfDay: 6 * 60), .none)
     }
+
+    func testRoundedSleepLossMinutesTracksBedtimeOnly() {
+        let schedule = BedtimeSchedule(
+            windDownStartMinute: 21 * 60 + 15,
+            startMinute: 21 * 60 + 30,
+            endMinute: 6 * 60
+        )
+
+        XCTAssertNil(schedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 29))
+        XCTAssertEqual(schedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 30), 0)
+        XCTAssertEqual(schedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 37), 0)
+        XCTAssertEqual(schedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 38), 15)
+        XCTAssertEqual(schedule.roundedSleepLossMinutes(minuteOfDay: 22 * 60 + 44), 75)
+        XCTAssertEqual(schedule.roundedSleepLossMinutes(minuteOfDay: 5 * 60 + 59), 510)
+        XCTAssertNil(schedule.roundedSleepLossMinutes(minuteOfDay: 6 * 60))
+    }
 }

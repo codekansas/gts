@@ -33,6 +33,29 @@ final class LaunchAtLoginControllerTests: XCTestCase {
         )
     }
 
+    func testSetEnabledRejectsUnsafeBundleIdentifier() throws {
+        let bundleURL = launchAgentDirectoryURL.appendingPathComponent("Go To Sleep.app", isDirectory: true)
+        let executableURL = bundleURL.appendingPathComponent("Contents/MacOS/GoToSleep")
+        let controller = makeController(
+            bundleURL: bundleURL,
+            executableURL: executableURL,
+            bundleIdentifier: "../com.evil.gotosleep"
+        )
+
+        XCTAssertEqual(
+            controller.currentStatus(),
+            LaunchAtLoginStatus(isEnabled: false, isAvailable: false)
+        )
+        XCTAssertThrowsError(try controller.setEnabled(true)) { error in
+            XCTAssertEqual(error as? LaunchAtLoginError, .invalidBundleIdentifier)
+        }
+
+        let escapedLaunchAgentURL = launchAgentDirectoryURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("com.evil.gotosleep.plist")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: escapedLaunchAgentURL.path))
+    }
+
     func testSetEnabledWritesLaunchAgentPlist() throws {
         let bundleURL = launchAgentDirectoryURL.appendingPathComponent("Go To Sleep.app", isDirectory: true)
         let executableURL = bundleURL.appendingPathComponent("Contents/MacOS/GoToSleep")
@@ -42,13 +65,13 @@ final class LaunchAtLoginControllerTests: XCTestCase {
 
         XCTAssertEqual(status, LaunchAtLoginStatus(isEnabled: true, isAvailable: true))
 
-        let propertyList = NSDictionary(contentsOf: launchAgentFileURL) as? [String: Any]
-        XCTAssertEqual(propertyList?["Label"] as? String, "com.benbolte.gotosleep")
+        let propertyList = try launchAgentPropertyList()
+        XCTAssertEqual(propertyList["Label"] as? String, "com.benbolte.gotosleep")
         XCTAssertEqual(
-            propertyList?["ProgramArguments"] as? [String],
-            [executableURL.path, LaunchAtLoginController.launchArgument]
+            propertyList["ProgramArguments"] as? [String],
+            [executableURL.path]
         )
-        XCTAssertEqual(propertyList?["RunAtLoad"] as? Bool, true)
+        XCTAssertEqual(propertyList["RunAtLoad"] as? Bool, true)
     }
 
     func testSetDisabledRemovesLaunchAgentPlist() throws {
@@ -86,10 +109,10 @@ final class LaunchAtLoginControllerTests: XCTestCase {
 
         _ = try updatedController.syncRegistrationIfNeeded()
 
-        let propertyList = NSDictionary(contentsOf: launchAgentFileURL) as? [String: Any]
+        let propertyList = try launchAgentPropertyList()
         XCTAssertEqual(
-            propertyList?["ProgramArguments"] as? [String],
-            [updatedExecutableURL.path, LaunchAtLoginController.launchArgument]
+            propertyList["ProgramArguments"] as? [String],
+            [updatedExecutableURL.path]
         )
     }
 
@@ -97,16 +120,23 @@ final class LaunchAtLoginControllerTests: XCTestCase {
         launchAgentDirectoryURL.appendingPathComponent("com.benbolte.gotosleep.plist")
     }
 
+    private func launchAgentPropertyList() throws -> [String: Any] {
+        let data = try Data(contentsOf: launchAgentFileURL)
+        let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
+        return try XCTUnwrap(propertyList as? [String: Any])
+    }
+
     private func makeController(
         bundleURL: URL,
-        executableURL: URL
+        executableURL: URL,
+        bundleIdentifier: String = "com.benbolte.gotosleep"
     ) -> LaunchAtLoginController {
         LaunchAtLoginController(
             fileManager: .default,
             launchAgentDirectoryURL: launchAgentDirectoryURL,
             bundleURLProvider: { bundleURL },
             executableURLProvider: { executableURL },
-            bundleIdentifierProvider: { "com.benbolte.gotosleep" }
+            bundleIdentifierProvider: { bundleIdentifier }
         )
     }
 }

@@ -5,15 +5,16 @@ import SwiftUI
 @MainActor
 final class ReminderController {
     private let margin: CGFloat = 18
-    private let height: CGFloat = 136
+    private let height: CGFloat = 158
     private let preferredWidth: CGFloat = 320
 
     private var panels: [ReminderPanel] = []
     private var screenSignatures: [String] = []
     private var currentPhase: SleepPhase = .none
+    private var currentSchedule: BedtimeSchedule?
     private var currentScheduleDescription = ""
 
-    func show(phase: SleepPhase, scheduleDescription: String) {
+    func show(phase: SleepPhase, schedule: BedtimeSchedule, scheduleDescription: String) {
         let screens = NSScreen.screens
         let signatures = screens.map { NSStringFromRect($0.visibleFrame) }
 
@@ -23,14 +24,15 @@ final class ReminderController {
                 makePanel(
                     for: $0,
                     phase: phase,
+                    schedule: schedule,
                     scheduleDescription: scheduleDescription
                 )
             }
             screenSignatures = signatures
         }
 
-        if currentPhase != phase || currentScheduleDescription != scheduleDescription {
-            updateContent(phase: phase, scheduleDescription: scheduleDescription)
+        if currentPhase != phase || currentSchedule != schedule || currentScheduleDescription != scheduleDescription {
+            updateContent(phase: phase, schedule: schedule, scheduleDescription: scheduleDescription)
         }
 
         for (panel, screen) in zip(panels, screens) {
@@ -47,6 +49,7 @@ final class ReminderController {
         panels.removeAll()
         screenSignatures.removeAll()
         currentPhase = .none
+        currentSchedule = nil
         currentScheduleDescription = ""
     }
 
@@ -57,6 +60,7 @@ final class ReminderController {
     private func makePanel(
         for screen: NSScreen,
         phase: SleepPhase,
+        schedule: BedtimeSchedule,
         scheduleDescription: String
     ) -> ReminderPanel {
         let width = panelWidth(for: screen)
@@ -71,6 +75,7 @@ final class ReminderController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
         panel.contentView = NSHostingView(rootView: ReminderView(
             phase: phase,
+            schedule: schedule,
             scheduleDescription: scheduleDescription
         ))
         panel.hasShadow = true
@@ -85,13 +90,15 @@ final class ReminderController {
         return panel
     }
 
-    private func updateContent(phase: SleepPhase, scheduleDescription: String) {
+    private func updateContent(phase: SleepPhase, schedule: BedtimeSchedule, scheduleDescription: String) {
         currentPhase = phase
+        currentSchedule = schedule
         currentScheduleDescription = scheduleDescription
 
         panels.forEach { panel in
             panel.contentView = NSHostingView(rootView: ReminderView(
                 phase: phase,
+                schedule: schedule,
                 scheduleDescription: scheduleDescription
             ))
         }
@@ -123,16 +130,27 @@ final class ReminderPanel: NSPanel {
 
 private struct ReminderView: View {
     let phase: SleepPhase
+    let schedule: BedtimeSchedule
     let scheduleDescription: String
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             TimelineView(.periodic(from: .now, by: 1)) { context in
-                Text(clockString(for: context.date))
-                    .font(.system(size: 42, weight: .bold, design: .monospaced))
-                    .foregroundStyle(foregroundColor)
-                    .lineLimit(1)
-                    .monospacedDigit()
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(clockString(for: context.date))
+                        .font(.system(size: 42, weight: .bold, design: .monospaced))
+                        .foregroundStyle(foregroundColor)
+                        .lineLimit(1)
+                        .monospacedDigit()
+
+                    if let sleepLossDescription = sleepLossDescription(for: context.date) {
+                        Text(sleepLossDescription)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(foregroundColor.opacity(0.86))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -219,5 +237,34 @@ private struct ReminderView: View {
             components.minute ?? 0,
             components.second ?? 0
         )
+    }
+
+    private func sleepLossDescription(for date: Date) -> String? {
+        let minute = BedtimeSchedule.minuteOfDay(for: date)
+        guard let sleepLossMinutes = schedule.roundedSleepLossMinutes(minuteOfDay: minute) else {
+            return nil
+        }
+
+        return "Losing \(durationDescription(minutes: sleepLossMinutes)) of sleep"
+    }
+
+    private func durationDescription(minutes: Int) -> String {
+        let hours = minutes / 60
+        let remainingMinutes = minutes % 60
+
+        let hourDescription = hours == 1 ? "1 hour" : "\(hours) hours"
+        let minuteDescription = remainingMinutes == 1
+            ? "1 minute"
+            : "\(remainingMinutes) minutes"
+
+        if hours == 0 {
+            return minuteDescription
+        }
+
+        if remainingMinutes == 0 {
+            return hourDescription
+        }
+
+        return "\(hourDescription), \(minuteDescription)"
     }
 }

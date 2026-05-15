@@ -1,9 +1,27 @@
+import GoToSleepCore
 import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var preferences: SleepPreferences
 
+    @State private var isLaunchAtLoginEnabled: Bool
+
+    let launchAtLoginStatus: LaunchAtLoginStatus
+    let onLaunchAtLoginChanged: (Bool) -> Void
     let onDone: () -> Void
+
+    init(
+        preferences: SleepPreferences,
+        launchAtLoginStatus: LaunchAtLoginStatus,
+        onLaunchAtLoginChanged: @escaping (Bool) -> Void,
+        onDone: @escaping () -> Void
+    ) {
+        self.preferences = preferences
+        self.launchAtLoginStatus = launchAtLoginStatus
+        self.onLaunchAtLoginChanged = onLaunchAtLoginChanged
+        self.onDone = onDone
+        self._isLaunchAtLoginEnabled = State(initialValue: launchAtLoginStatus.isEnabled)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -28,6 +46,18 @@ struct SettingsView: View {
                     selection: $preferences.bedtimeEndDate,
                     displayedComponents: .hourAndMinute
                 )
+            }
+
+            Toggle(
+                launchAtLoginStatus.isAvailable
+                    ? "Open at login"
+                    : "Open at login unavailable",
+                isOn: $isLaunchAtLoginEnabled
+            )
+            .toggleStyle(.checkbox)
+            .disabled(!launchAtLoginStatus.isAvailable)
+            .onChange(of: isLaunchAtLoginEnabled) { isEnabled in
+                onLaunchAtLoginChanged(isEnabled)
             }
 
             HStack {

@@ -10,8 +10,9 @@ public struct LaunchAtLoginStatus: Equatable, Sendable {
     }
 }
 
-public enum LaunchAtLoginError: LocalizedError {
+public enum LaunchAtLoginError: Equatable, LocalizedError {
     case appBundleRequired
+    case invalidBundleIdentifier
     case unableToCreateLaunchAgent
     case unableToWriteLaunchAgent
     case unableToRemoveLaunchAgent
@@ -20,6 +21,8 @@ public enum LaunchAtLoginError: LocalizedError {
         switch self {
         case .appBundleRequired:
             "Open at Login is available only when Go To Sleep is launched from Go To Sleep.app."
+        case .invalidBundleIdentifier:
+            "Go To Sleep couldn't determine a safe login item identifier."
         case .unableToCreateLaunchAgent:
             "Go To Sleep couldn't create its login item configuration."
         case .unableToWriteLaunchAgent:
@@ -37,7 +40,10 @@ public protocol LaunchAtLoginControlling {
 }
 
 public final class LaunchAtLoginController: LaunchAtLoginControlling {
-    public static let launchArgument = "--launch-at-login"
+    private static let fallbackBundleIdentifier = "com.benbolte.gotosleep"
+    private static let validLabelCharacters = CharacterSet(
+        charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-"
+    )
 
     private let fileManager: FileManager
     private let launchAgentDirectoryURL: URL
@@ -62,9 +68,10 @@ public final class LaunchAtLoginController: LaunchAtLoginControlling {
     }
 
     public func currentStatus() -> LaunchAtLoginStatus {
-        LaunchAtLoginStatus(
-            isEnabled: fileManager.fileExists(atPath: launchAgentURL.path),
-            isAvailable: bundledExecutableURL != nil
+        let launchAgentURL = launchAgentURL
+        return LaunchAtLoginStatus(
+            isEnabled: launchAgentURL.map { fileManager.fileExists(atPath: $0.path) } ?? false,
+            isAvailable: bundledExecutableURL != nil && launchAgentURL != nil
         )
     }
 
@@ -98,22 +105,30 @@ public final class LaunchAtLoginController: LaunchAtLoginControlling {
         return executableURL
     }
 
-    private var launchAgentLabel: String {
-        bundleIdentifierProvider() ?? "com.benbolte.gotosleep"
+    private var launchAgentLabel: String? {
+        let label = bundleIdentifierProvider() ?? Self.fallbackBundleIdentifier
+        return Self.isValidLaunchAgentLabel(label) ? label : nil
     }
 
-    private var launchAgentURL: URL {
-        launchAgentDirectoryURL.appendingPathComponent("\(launchAgentLabel).plist")
+    private var launchAgentURL: URL? {
+        guard let launchAgentLabel else {
+            return nil
+        }
+
+        return launchAgentDirectoryURL.appendingPathComponent("\(launchAgentLabel).plist")
     }
 
     private func writeLaunchAgent() throws {
         guard let executableURL = bundledExecutableURL else {
             throw LaunchAtLoginError.appBundleRequired
         }
+        guard let launchAgentLabel, let launchAgentURL else {
+            throw LaunchAtLoginError.invalidBundleIdentifier
+        }
 
         let propertyList: [String: Any] = [
             "Label": launchAgentLabel,
-            "ProgramArguments": [executableURL.path, Self.launchArgument],
+            "ProgramArguments": [executableURL.path],
             "RunAtLoad": true,
         ]
 
@@ -145,6 +160,9 @@ public final class LaunchAtLoginController: LaunchAtLoginControlling {
     }
 
     private func removeLaunchAgent() throws {
+        guard let launchAgentURL else {
+            return
+        }
         guard fileManager.fileExists(atPath: launchAgentURL.path) else {
             return
         }
@@ -154,5 +172,16 @@ public final class LaunchAtLoginController: LaunchAtLoginControlling {
         } catch {
             throw LaunchAtLoginError.unableToRemoveLaunchAgent
         }
+    }
+
+    private static func isValidLaunchAgentLabel(_ label: String) -> Bool {
+        guard !label.isEmpty,
+              !label.hasPrefix("."),
+              !label.hasSuffix("."),
+              !label.contains("..") else {
+            return false
+        }
+
+        return label.unicodeScalars.allSatisfy { validLabelCharacters.contains($0) }
     }
 }

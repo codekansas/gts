@@ -7,6 +7,16 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
     }
 }
 
+func readPropertyList(at url: URL) throws -> [String: Any] {
+    let data = try Data(contentsOf: url)
+    let propertyList = try PropertyListSerialization.propertyList(from: data, format: nil)
+    guard let dictionary = propertyList as? [String: Any] else {
+        fatalError("Expected dictionary plist at \(url.path)")
+    }
+
+    return dictionary
+}
+
 let overnightSchedule = BedtimeSchedule(startMinute: 22 * 60, endMinute: 7 * 60)
 expect(overnightSchedule.contains(minuteOfDay: 22 * 60), "overnight schedule includes start")
 expect(overnightSchedule.contains(minuteOfDay: 23 * 60 + 30), "overnight schedule includes late night")
@@ -40,6 +50,12 @@ expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 29) == .windDown, "phase incl
 expect(phasedSchedule.phase(minuteOfDay: 21 * 60 + 30) == .bedtime, "phase includes bedtime start")
 expect(phasedSchedule.phase(minuteOfDay: 5 * 60 + 59) == .bedtime, "phase includes early morning")
 expect(phasedSchedule.phase(minuteOfDay: 6 * 60) == .none, "phase excludes wake time")
+expect(phasedSchedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 29) == nil, "sleep loss excludes wind-down")
+expect(phasedSchedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 30) == 0, "sleep loss starts at bedtime")
+expect(phasedSchedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 37) == 0, "sleep loss rounds down")
+expect(phasedSchedule.roundedSleepLossMinutes(minuteOfDay: 21 * 60 + 38) == 15, "sleep loss rounds up")
+expect(phasedSchedule.roundedSleepLossMinutes(minuteOfDay: 22 * 60 + 44) == 75, "sleep loss rounds to nearest quarter hour")
+expect(phasedSchedule.roundedSleepLossMinutes(minuteOfDay: 5 * 60 + 59) == 510, "sleep loss crosses midnight")
 
 let temporaryDirectoryURL = FileManager.default.temporaryDirectory.appendingPathComponent(
     "GoToSleepChecks.\(UUID().uuidString)",
@@ -65,6 +81,34 @@ expect(
 
 let bundleURL = temporaryDirectoryURL.appendingPathComponent("Go To Sleep.app", isDirectory: true)
 let executableURL = bundleURL.appendingPathComponent("Contents/MacOS/GoToSleep")
+let unsafeLaunchAtLoginController = LaunchAtLoginController(
+    launchAgentDirectoryURL: temporaryDirectoryURL,
+    bundleURLProvider: { bundleURL },
+    executableURLProvider: { executableURL },
+    bundleIdentifierProvider: { "../com.evil.gotosleep" }
+)
+expect(
+    unsafeLaunchAtLoginController.currentStatus() == LaunchAtLoginStatus(
+        isEnabled: false,
+        isAvailable: false
+    ),
+    "launch-at-login rejects unsafe bundle identifiers"
+)
+do {
+    _ = try unsafeLaunchAtLoginController.setEnabled(true)
+    fatalError("launch-at-login should not enable an unsafe bundle identifier")
+} catch LaunchAtLoginError.invalidBundleIdentifier {
+} catch {
+    fatalError("launch-at-login failed with unexpected error: \(error)")
+}
+let escapedLaunchAgentURL = temporaryDirectoryURL
+    .deletingLastPathComponent()
+    .appendingPathComponent("com.evil.gotosleep.plist")
+expect(
+    !FileManager.default.fileExists(atPath: escapedLaunchAgentURL.path),
+    "unsafe bundle identifier cannot escape launch agent directory"
+)
+
 let launchAtLoginController = LaunchAtLoginController(
     launchAgentDirectoryURL: temporaryDirectoryURL,
     bundleURLProvider: { bundleURL },
@@ -78,12 +122,11 @@ expect(
 )
 
 let launchAgentURL = temporaryDirectoryURL.appendingPathComponent("com.benbolte.gotosleep.plist")
-let propertyList = NSDictionary(contentsOf: launchAgentURL) as? [String: Any]
-expect(propertyList?["Label"] as? String == "com.benbolte.gotosleep", "launch agent has expected label")
+let propertyList = try readPropertyList(at: launchAgentURL)
+expect(propertyList["Label"] as? String == "com.benbolte.gotosleep", "launch agent has expected label")
 expect(
-    propertyList?["ProgramArguments"] as? [String] == [
+    propertyList["ProgramArguments"] as? [String] == [
         executableURL.path,
-        LaunchAtLoginController.launchArgument,
     ],
     "launch agent points at bundled executable"
 )
