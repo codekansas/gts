@@ -1,0 +1,57 @@
+# Go To Sleep
+
+Go To Sleep is a tiny macOS menu-bar app. Configure a bedtime range from the status item, and while that range is active the app keeps a floating reminder visible in the top-right corner:
+
+> It's time for bed
+
+The reminder ignores mouse events, so it does not block clicks or typing in other apps. During bedtime, the app disables its normal Quit command and re-shows the reminder if the app is hidden.
+
+## Development
+
+Run it directly:
+
+```sh
+swift run GoToSleep
+```
+
+Build a double-clickable menu-bar app bundle:
+
+```sh
+./scripts/build_app.sh
+open "dist/Go To Sleep.app"
+```
+
+Run local checks:
+
+```sh
+swift run GoToSleepChecks
+```
+
+This checkout only has the macOS Command Line Tools installed, so local
+`swift test` may fail with a missing `XCTest` module. GitHub Actions selects
+Xcode and runs the normal `swift test` workflow.
+
+## CI and Releases
+
+- Pull requests and pushes run the `unit-tests` GitHub Actions workflow.
+- Published GitHub Releases run the `release` workflow, which builds a `.app`,
+  packages a `.zip`, and uploads the `.zip` plus a SHA-256 checksum to the
+  release.
+- GitHub release builds require `APPLE_DEVELOPER_ID_APPLICATION_P12` and
+  `APPLE_DEVELOPER_ID_APPLICATION_P12_PASSWORD`, then sign the app with
+  Developer ID.
+- If GitHub Actions also has `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, and
+  `APPLE_TEAM_ID` configured, the release workflow notarizes the `.app` and
+  staples the notarization ticket before packaging.
+- The manual `app-store` workflow builds a Mac App Store `.pkg` and can upload
+  it to App Store Connect. It requires
+  `APPLE_MAC_APP_DISTRIBUTION_P12`,
+  `APPLE_MAC_APP_DISTRIBUTION_P12_PASSWORD`,
+  `APPLE_MAC_APP_DISTRIBUTION_IDENTITY`,
+  `APPLE_MAC_INSTALLER_DISTRIBUTION_P12`,
+  `APPLE_MAC_INSTALLER_DISTRIBUTION_P12_PASSWORD`,
+  `APPLE_MAC_INSTALLER_DISTRIBUTION_IDENTITY`,
+  `APPLE_MAC_APP_STORE_PROVISIONING_PROFILE`,
+  `APP_STORE_CONNECT_API_KEY_ID`,
+  `APP_STORE_CONNECT_API_ISSUER_ID`, and
+  `APP_STORE_CONNECT_API_PRIVATE_KEY`.
