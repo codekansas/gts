@@ -12,6 +12,8 @@
 	<string>com.benbolte.gotosleep</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleIconFile</key>
+	<string>GoToSleep.icns</string>
 	<key>CFBundleName</key>
 	<string>Go To Sleep</string>
 	<key>CFBundlePackageType</key>

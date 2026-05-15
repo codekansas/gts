@@ -8,6 +8,8 @@ Wind-down defaults to 9:15 PM - 9:30 PM and shows a yellow reminder. Bedtime def
 
 The reminder ignores mouse events, so it does not block clicks or typing in other apps. While a reminder is active, the app disables its normal Quit command and re-shows the reminder if the app is hidden.
 
+Use the menu-bar dropdown to toggle `Open at Login` after installing the app.
+
 ## Development
 
 Run it directly:

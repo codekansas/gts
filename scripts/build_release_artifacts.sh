@@ -14,6 +14,8 @@ ZIP_PATH="$OUTPUT_DIR/$PRODUCT_NAME-$VERSION.zip"
 CHECKSUM_PATH="$OUTPUT_DIR/$PRODUCT_NAME-$VERSION.sha256"
 NOTARY_TEMP_DIR="$OUTPUT_DIR/notary"
 NOTARY_ZIP_PATH="$NOTARY_TEMP_DIR/$PRODUCT_NAME-$VERSION-notary.zip"
+ICON_SOURCE_PATH="$ROOT_DIR/Packaging/GoToSleepIcon.png"
+ICON_FILE_NAME="$PRODUCT_NAME.icns"
 
 SIGNING_IDENTITY="${GOTOSLEEP_SIGNING_IDENTITY:-}"
 SIGNING_KEYCHAIN="${GOTOSLEEP_SIGNING_KEYCHAIN:-}"
@@ -90,6 +92,11 @@ BIN_PATH="$BUILD_BIN_PATH/$PRODUCT_NAME"
 cp "$BIN_PATH" "$APP_BUNDLE_PATH/Contents/MacOS/$PRODUCT_NAME"
 chmod 755 "$APP_BUNDLE_PATH/Contents/MacOS/$PRODUCT_NAME"
 find "$BUILD_BIN_PATH" -maxdepth 1 -type d -name '*.bundle' -exec cp -R {} "$APP_BUNDLE_PATH/Contents/Resources/" \;
+"$ROOT_DIR/scripts/install_app_icon.sh" \
+    "$ICON_SOURCE_PATH" \
+    "$APP_BUNDLE_PATH/Contents/Resources" \
+    "$ICON_FILE_NAME" \
+    "$OUTPUT_DIR/icon-build"
 
 cat >"$APP_BUNDLE_PATH/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -106,6 +113,8 @@ cat >"$APP_BUNDLE_PATH/Contents/Info.plist" <<EOF
     <string>$BUNDLE_IDENTIFIER</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleIconFile</key>
+    <string>$ICON_FILE_NAME</string>
     <key>CFBundleName</key>
     <string>$DISPLAY_NAME</string>
     <key>CFBundlePackageType</key>
